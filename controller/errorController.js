@@ -16,6 +16,9 @@ const handleVlidationErrorDb = (err) => {
   const message = errors;
   return new ApiError(message, 400);
 };
+const handleInvalidJsonTokenrrorDb = () =>
+  new ApiError('Invalid Json Token Please Login', 401);
+const handleTokenExpire = () => new ApiError('Token Expires Please Login', 401);
 const sendErrorDec = (err, res) => {
   //send error in development
   res.status(err.statusCode).json({
@@ -49,6 +52,9 @@ module.exports = (err, req, res, next) => {
     if (error.name === 'CastError') error = handleCastErrorDb(error);
     if (error.code === 11000) error = handleDuplicatFieldDb(error);
     if (error.code === 'ValidationError') error = handleVlidationErrorDb(error);
+    if (error.name === 'JsonWebTokenError')
+      error = handleInvalidJsonTokenrrorDb();
+    if (error.name === 'TokenExpiredError') error = handleTokenExpire();
     sendErrorProd(error, res);
   }
   res.status(err.statusCode).send({

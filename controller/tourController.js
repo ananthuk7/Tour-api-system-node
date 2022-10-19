@@ -164,7 +164,7 @@ exports.getMonthlyPlan = catchAsync(async (req, res, next) => {
 
   const plan = await Tour.aggregate([
     {
-      $unwind: '$startDates',
+      $unwind: '$startDates', //for destructuring the array of dates
     },
     {
       $match: {
@@ -176,12 +176,12 @@ exports.getMonthlyPlan = catchAsync(async (req, res, next) => {
     },
     {
       $group: {
-        _id: { $month: '$startDates' },
+        _id: { $month: '$startDates' }, //$month for extract month from dates
         numberOfTours: { $sum: 1 },
-        tours: { $push: '$name' },
+        tours: { $push: '$name' }, //$push for push into array
       },
     },
-    { $addFields: { month: '$_id' } },
+    { $addFields: { month: '$_id' } }, //month get the value of id
     { $project: { _id: 0 } },
     {
       $sort: {

@@ -88,7 +88,6 @@ tourSchema.pre(/^find/, function (next) {
 });
 tourSchema.post(/^find/, function (doc, next) {
   //regular expression for all the find method
-  console.log(doc);
   console.log(`it took ${Date.now() - this.start} ms`);
   next();
 });
