@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
@@ -6,11 +7,21 @@ const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
 const tourRouter = require('./routes/tourRoutes');
-const userRouter = require('./routes/authRouter');
+const reviewRouter = require('./routes/reviewRouter');
+const userRouter = require('./routes/userRouter');
+
 const ApiError = require('./utils/errorHandler');
 const errorHandlerMiddleware = require('./controller/errorController');
 
 const app = express();
+
+app.set('view engine', 'pug');
+app.set('views', path.join(__dirname, 'views'));
+
+//serving static files
+// app.use(express.static(`${__dirname}/public`));
+app.use(express.static(path.join(__dirname, 'public')));
+
 //set security http headers
 app.use(helmet());
 
@@ -36,8 +47,6 @@ app.use(
     whitelist: ['duration'],
   })
 );
-//serving static files
-app.use(express.static(`${__dirname}/public`));
 
 // app.use((req, res, next) => {
 //   console.log(req.headers);
@@ -45,7 +54,9 @@ app.use(express.static(`${__dirname}/public`));
 // });
 
 app.use('/api/v1/tours', tourRouter);
-app.use('/api/v1/users', userRouter);
+app.use('/api/v1/review', reviewRouter);
+app.use('/api/v1/users/', userRouter);
+
 app.all('*', (req, res, next) => {
   next(new ApiError(`not found ${req.originalUrl}`, 404));
 });

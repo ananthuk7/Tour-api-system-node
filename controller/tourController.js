@@ -1,8 +1,9 @@
 // const fs = require('fs');
 const Tour = require('../models/tourModel');
-const ApiFeatures = require('../utils/apiFeatures');
+// const ApiFeatures = require('../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
-const ApiError = require('../utils/errorHandler');
+const AppError = require('../utils/errorHandler');
+const factory = require('./handlerFactory');
 
 // const tour = JSON.parse(
 //   fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`)
@@ -34,95 +35,58 @@ exports.checkBody = (req, res, next, val) => {
   next();
 };
 
-exports.getTours = catchAsync(async (req, res, next) => {
-  // const queryObj = { ...req.query };
-  // const excludeQuery = ['sort', 'page', 'fields', 'limit'];
-  // excludeQuery.forEach((el) => delete queryObj[el]);
-  // let stringQuery = JSON.stringify(queryObj);
-  // stringQuery = JSON.parse(
-  //   stringQuery.replace(/\b(gte|lte|lt|gt)\b/g, (match) => `$${match}`)
-  // );
-  // let query = Tour.find(stringQuery);
+// exports.getTours = catchAsync(async (req, res, next) => {
+// const queryObj = { ...req.query };
+// const excludeQuery = ['sort', 'page', 'fields', 'limit'];
+// excludeQuery.forEach((el) => delete queryObj[el]);
+// let stringQuery = JSON.stringify(queryObj);
+// stringQuery = JSON.parse(
+//   stringQuery.replace(/\b(gte|lte|lt|gt)\b/g, (match) => `$${match}`)
+// );
+// let query = Tour.find(stringQuery);
 
-  //SOrting
-  // if (req.query.sort) {
-  //   const sortBy = req.query.sort.split(',').join(' ');
-  //   query = query.sort(sortBy);
-  // } else {
-  //   query = query.sort('-createdAt');
-  // }
-  //limiting fields
-  // if (req.query.fields) {
-  //   const fieldsBy = req.query.fields.split(',').join(' ');
-  //   query = query.select(fieldsBy);
-  // } else {
-  //   query = query.select('-__v'); //- for excluding
-  // }
-  //paginations
-  // const page = req.query.page * 1;
-  // const limit = req.query.limit * 1;
-  // const skip = limit * (page - 1);
-  // if (req.query.page) {
-  //   const countTours = await Tour.countDocuments();
+//SOrting
+// if (req.query.sort) {
+//   const sortBy = req.query.sort.split(',').join(' ');
+//   query = query.sort(sortBy);
+// } else {
+//   query = query.sort('-createdAt');
+// }
+//limiting fields
+// if (req.query.fields) {
+//   const fieldsBy = req.query.fields.split(',').join(' ');
+//   query = query.select(fieldsBy);
+// } else {
+//   query = query.select('-__v'); //- for excluding
+// }
+//paginations
+// const page = req.query.page * 1;
+// const limit = req.query.limit * 1;
+// const skip = limit * (page - 1);
+// if (req.query.page) {
+//   const countTours = await Tour.countDocuments();
 
-  //   if (skip >= countTours) throw new Error('page not avilable');
-  // }
-  // query = query.skip(skip).limit(limit);
-  const features = new ApiFeatures(Tour.find(), req.query)
-    .filter()
-    .sort()
-    .fields()
-    .paginate();
-  const tours = await features.query;
-  res.status(200).json({
-    status: 'OK',
-    results: tours.length,
-    data: { tours },
-  });
-});
-exports.createTour = catchAsync(async (req, res, next) => {
-  const tourData = await Tour.create(req.body);
-  res.status(201).json({
-    status: 'success',
-    tour: tourData,
-  });
-});
-exports.getTour = catchAsync(async (req, res, next) => {
-  const tourData = await Tour.findById(req.params.id);
-  if (!tourData) {
-    return next(new ApiError('NO Tour In This Id', 404));
-  }
-  res.status(200).json({
-    status: 'success',
-    data: {
-      tourData,
-    },
-  });
-});
+//   if (skip >= countTours) throw new Error('page not avilable');
+// }
+// query = query.skip(skip).limit(limit);
+//   const features = new ApiFeatures(Tour.find(), req.query)
+//     .filter()
+//     .sort()
+//     .fields()
+//     .paginate();
+//   const tours = await features.query;
+//   res.status(200).json({
+//     status: 'OK',
+//     results: tours.length,
+//     data: { tours },
+//   });
+// });
 
-exports.updateTour = catchAsync(async (req, res, next) => {
-  const tourData = await Tour.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true,
-  });
-  if (!tourData) return next(new ApiError('NO Tour In This Id', 404));
-  res.status(200).json({
-    status: 'success',
-    data: {
-      tourData,
-    },
-  });
-});
-
-exports.deleteTour = catchAsync(async (req, res, next) => {
-  const tourData = await Tour.findByIdAndDelete(req.params.id);
-  res.status(200).json({
-    status: 'success',
-    data: {
-      tourData,
-    },
-  });
-});
+exports.getTours = factory.getAll(Tour);
+exports.createTour = factory.createOne(Tour);
+exports.getTour = factory.getOne(Tour, { path: 'reviews' });
+exports.updateTour = factory.updateOne(Tour);
+exports.deleteTour = factory.deleteOne(Tour);
 
 exports.aggregateGroup = catchAsync(async (req, res, next) => {
   const stats = await Tour.aggregate([
@@ -198,5 +162,54 @@ exports.getMonthlyPlan = catchAsync(async (req, res, next) => {
     data: {
       plan,
     },
+  });
+});
+
+exports.getToursWithin = catchAsync(async (req, res, next) => {
+  const { distance, latlon, unit } = req.params;
+  const radius = unit === 'mi' ? distance / 3963 : distance / 6378.1; //radius of earth in miles 3963 and6378.1 in kilometers
+  const [lat, lng] = latlon.split(',');
+  if (!lat || !lng)
+    return next(
+      new AppError('Please provide a lat and lon in correct format', 400)
+    );
+  const tours = await Tour.find({
+    startLocation: { $geoWithin: { $centerSphere: [[lng, lat], radius] } },
+  });
+  res.status(200).json({
+    status: 'success',
+    results: tours.length,
+    data: tours,
+  });
+});
+exports.distances = catchAsync(async (req, res, next) => {
+  const { latlon, unit } = req.params;
+  const [lat, lng] = latlon.split(',');
+  const multiplier = unit === 'mi' ? 0.000621371 : 0.001;
+  if (!lat || !lng) {
+    next(new AppError('Please provide a lat and lon in correct format', 400));
+  }
+  const distances = await Tour.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: 'Point',
+          coordinates: [lng * 1, lat * 1],
+        },
+        distanceField: 'distance',
+        distanceMultiplier: multiplier,
+      },
+    },
+    {
+      $project: {
+        distance: 1,
+        name: 1,
+      },
+    },
+  ]);
+  res.status(200).json({
+    status: 'success',
+    results: distances.length,
+    data: distances,
   });
 });

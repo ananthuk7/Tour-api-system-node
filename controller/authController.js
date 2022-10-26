@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const User = require('../models/userModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/errorHandler');
+const factory = require('./handlerFactory');
 const sendEmail = require('../utils/email');
 
 const getUserToken = (id) =>
@@ -11,6 +12,15 @@ const getUserToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET_KEY, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
+const getFilterFields = (oldObj, ...requiredFields) => {
+  const newObj = {};
+  Object.keys(oldObj).forEach((field) => {
+    if (requiredFields.includes(field)) {
+      newObj[field] = oldObj[field];
+    }
+  });
+  return newObj;
+};
 const sendOrCreateToken = (user, statusCode, res) => {
   const token = getUserToken(user._id);
   const cookieOptions = {
@@ -159,15 +169,7 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
   await user.save();
   sendOrCreateToken(user, 200, res);
 });
-const getFilterFields = (oldObj, ...requiredFields) => {
-  const newObj = {};
-  Object.keys(oldObj).forEach((field) => {
-    if (requiredFields.includes(field)) {
-      newObj[field] = oldObj[field];
-    }
-  });
-  return newObj;
-};
+
 exports.updateMe = catchAsync(async (req, res, next) => {
   const filterFields = getFilterFields(req.body, 'name', 'email');
   const user = await User.findByIdAndUpdate(req.user.id, filterFields, {
@@ -180,3 +182,11 @@ exports.deleteMe = catchAsync(async (req, res, next) => {
   const user = await User.findByIdAndUpdate(req.user.id, { active: false });
   res.status(204).json({ status: 'success', data: { user: null } });
 });
+
+exports.getMe = (req, res, next) => {
+  req.params.id = req.user.id;
+  next();
+};
+exports.userList = factory.getAll(User);
+exports.deleteUser = factory.deleteOne(User);
+exports.getUser = factory.getOne(User);
