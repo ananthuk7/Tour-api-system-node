@@ -31,6 +31,8 @@ router
   )
   .put(
     authController.protect,
+    tourController.tourImageUpload,
+    tourController.resizeTourImages,
     authController.restrictTo('admin', 'lead-guide'),
     tourController.updateTour
   );

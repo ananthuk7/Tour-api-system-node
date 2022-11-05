@@ -1,4 +1,6 @@
 // const fs = require('fs');
+const multer = require('multer');
+const sharp = require('sharp');
 const Tour = require('../models/tourModel');
 // const ApiFeatures = require('../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
@@ -18,6 +20,47 @@ const factory = require('./handlerFactory');
 //   }
 //   next();
 // };
+const muterStorage = multer.memoryStorage(); // for croping the image
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('please use an image for upload', 400), false);
+  }
+};
+
+// const upload = multer({ dest: 'public/img/users' }); simple
+
+const upload = multer({ storage: muterStorage, fileFilter: multerFilter }); //complex file upload
+
+exports.tourImageUpload = upload.fields([
+  { name: 'imageCover', maxCount: 1 },
+  { name: 'images', maxCount: 3 },
+]);
+
+exports.resizeTourImages = catchAsync(async (req, res, next) => {
+  if (!req.files.imageCover || !req.files.images) return next();
+  //cover image
+  req.body.imageCover = `tour-${req.params.id}-${Date.now()}-cover.jpeg`;
+  await sharp(req.files.imageCover[0].buffer)
+    .resize(2000, 1333)
+    .toFormat('jpeg')
+    .jpeg({ quality: 90 })
+    .toFile(`public/img/users/${req.body.imageCover}`);
+
+  //images
+  req.body.images = [];
+  req.files.images.map(async (file, i) => {
+    const filename = `tour-${req.params.id}-${Date.now()}-${i + 1}.jpeg`;
+    await sharp(file.buffer)
+      .resize(2000, 1333)
+      .toFormat('jpeg')
+      .jpeg({ quality: 90 })
+      .toFile(`public/img/users/${filename}`);
+    req.body.images.push(filename);
+  });
+  next();
+});
 exports.alias = (req, res, next) => {
   req.query.limit = 5;
   req.query.sort = '-ratingsAverage,price';
@@ -99,8 +142,8 @@ exports.aggregateGroup = catchAsync(async (req, res, next) => {
       $group: {
         _id: { $toUpper: '$difficulty' },
         numTours: { $sum: 1 },
-        numRatings: { $sum: '$ratingQuantity' },
-        avgRating: { $avg: '$ratingAverage' },
+        numRatings: { $sum: '$ratingsQuantity' },
+        avgRating: { $avg: '$ratingsAverage' },
         avgPrice: { $avg: '$price' },
         minPrice: { $min: '$price' },
         maxPrice: { $max: '$price' },

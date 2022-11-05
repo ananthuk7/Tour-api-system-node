@@ -1,12 +1,47 @@
 const jwt = require('jsonwebtoken');
 const { promisify } = require('util');
 const crypto = require('crypto');
+const multer = require('multer');
+const sharp = require('sharp');
 const User = require('../models/userModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/errorHandler');
 const factory = require('./handlerFactory');
-const sendEmail = require('../utils/email');
+const Email = require('../utils/email');
 
+// const muterStorage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, 'public/img/users');
+//   },
+//   filename: (req, file, cb) => {
+//     const extn = file.mimetype.split('/')[1];
+//     cb(null, `user-${req.user.id}-${Date.now()}.${extn}`);
+//   },
+// });
+const muterStorage = multer.memoryStorage(); // for croping the image
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('please use an image for upload', 400), false);
+  }
+};
+
+// const upload = multer({ dest: 'public/img/users' }); simple
+
+const upload = multer({ storage: muterStorage, fileFilter: multerFilter }); //complex file upload
+
+exports.userImageUpload = upload.single('photo');
+exports.resizeUSerPhoto = catchAsync(async (req, res, next) => {
+  if (!req.file) return next();
+  req.file.filename = `user-${req.user.id}-${Date.now()}.jpeg`;
+  await sharp(req.file.buffer)
+    .resize(500, 500)
+    .toFormat('jpeg')
+    .jpeg({ quality: 90 })
+    .toFile(`public/img/users/${req.file.filename}`);
+  next();
+});
 const getUserToken = (id) =>
   //jwt.signin(payload,secret-key must be 32 length,options)
   jwt.sign({ id }, process.env.JWT_SECRET_KEY, {
@@ -34,6 +69,7 @@ const sendOrCreateToken = (user, statusCode, res) => {
   user.password = undefined;
   res.status(statusCode).json({ status: 'success', token, data: { user } });
 };
+
 exports.signUp = catchAsync(async (req, res, next) => {
   const newUser = await User.create({
     name: req.body.name,
@@ -42,6 +78,8 @@ exports.signUp = catchAsync(async (req, res, next) => {
     role: req.body.role,
     confirmPassword: req.body.confirmPassword,
   }); //helps to prevent unwanted admin create
+  const url = `${req.protocol}://${req.get('host')}/me`;
+  new Email(newUser, url).sendWelcome();
   sendOrCreateToken(newUser, 201, res);
 });
 
@@ -60,6 +98,14 @@ exports.login = catchAsync(async (req, res, next) => {
   sendOrCreateToken(user, 200, res);
 });
 
+exports.logout = catchAsync(async (req, res, next) => {
+  res.cookie('jwt', 'loggedout', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+  });
+  res.status(200).json({ status: 'success' });
+});
+
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
   //Getting the token
@@ -68,6 +114,8 @@ exports.protect = catchAsync(async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.jwt) {
+    token = req.cookies.jwt;
   }
   if (!token) {
     return next(new AppError('Invalid user please Sign in', 401));
@@ -114,16 +162,20 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   const resetToken = user.createPasswordResetToken();
   await user.save({ validateBeforeSave: false });
   //send it to user email
-  const resetLink = `${req.protocol}://${req.get(
-    'host'
-  )}/api/v1/user/resetpassword/${resetToken}`;
-  const message = `Forget your password? Submit a patch request to your new password and confirmPassword to: ${resetLink}.\nIf you didn't forget your mail please ignore it`;
+  // const resetLink = `${req.protocol}://${req.get(
+  // 'host'
+  // )}/api/v1/user/resetpassword/${resetToken}`;
+  // const message = `Forget your password? Submit a patch request to your new password and confirmPassword to: ${resetLink}.\nIf you didn't forget your mail please ignore it`;
   try {
-    await sendEmail({
-      email: user.email,
-      subject: `Your password reset valid for 10 min`,
-      message,
-    });
+    // await sendEmail({
+    //   email: user.email,
+    //   subject: `Your password reset valid for 10 min`,
+    //   message,
+    // });
+    const url = `${req.protocol}://${req.get(
+      'host'
+    )}/api/v1/user/resetpassword/${resetToken}`;
+    await new Email(user, url).resetPassword();
   } catch (e) {
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
@@ -172,6 +224,7 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
 
 exports.updateMe = catchAsync(async (req, res, next) => {
   const filterFields = getFilterFields(req.body, 'name', 'email');
+  if (req.file) filterFields.photo = req.file.filename;
   const user = await User.findByIdAndUpdate(req.user.id, filterFields, {
     new: true,
     runValidators: true,
@@ -179,7 +232,7 @@ exports.updateMe = catchAsync(async (req, res, next) => {
   res.status(200).json({ status: 'success', data: { user } });
 });
 exports.deleteMe = catchAsync(async (req, res, next) => {
-  const user = await User.findByIdAndUpdate(req.user.id, { active: false });
+  await User.findByIdAndUpdate(req.user.id, { active: false });
   res.status(204).json({ status: 'success', data: { user: null } });
 });
 

@@ -43,13 +43,13 @@ reviewSchema.statics.calculateAverageRating = async function (tourId) {
   ]);
   if (stats.length > 0) {
     await Tour.findByIdAndUpdate(tourId, {
-      ratingQuantity: stats[0].nRating,
-      ratingAverage: stats[0].avgRating,
+      ratingsQuantity: stats[0].nRating,
+      ratingsAverage: stats[0].avgRating,
     });
   } else {
     await Tour.findByIdAndUpdate(tourId, {
-      ratingQuantity: 0,
-      ratingAverage: 4.5,
+      ratingsQuantity: 0,
+      ratingsAverage: 4.5,
     });
   }
 };

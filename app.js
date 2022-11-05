@@ -6,9 +6,12 @@ const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
+const cookieParser = require('cookie-parser');
 const tourRouter = require('./routes/tourRoutes');
 const reviewRouter = require('./routes/reviewRouter');
+const bookingRouter = require('./routes/bookingRouter');
 const userRouter = require('./routes/userRouter');
+const viewRouter = require('./routes/viewRouter');
 
 const ApiError = require('./utils/errorHandler');
 const errorHandlerMiddleware = require('./controller/errorController');
@@ -37,6 +40,8 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 //body parser
 app.use(express.json({ limit: 'kb' }));
+app.use(express.urlencoded({ extended: true, limit: 'kb' })); //extended true for work with complex data
+app.use(cookieParser());
 //data sanitization for nosql injection
 app.use(mongoSanitize());
 //data sanitization for xss
@@ -52,9 +57,14 @@ app.use(
 //   console.log(req.headers);
 //   next();
 // });
+// app.get('/', (req, res, next) => {
+//   res.status(200).render('base');
+// });
 
+app.use('/', viewRouter);
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/review', reviewRouter);
+app.use('/api/v1/booking/', bookingRouter);
 app.use('/api/v1/users/', userRouter);
 
 app.all('*', (req, res, next) => {
