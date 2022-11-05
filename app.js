@@ -7,12 +7,11 @@ const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
 const cookieParser = require('cookie-parser');
+const cors = require('cors');
 const tourRouter = require('./routes/tourRoutes');
 const reviewRouter = require('./routes/reviewRouter');
-const bookingRouter = require('./routes/bookingRouter');
 const userRouter = require('./routes/userRouter');
 const viewRouter = require('./routes/viewRouter');
-
 const ApiError = require('./utils/errorHandler');
 const errorHandlerMiddleware = require('./controller/errorController');
 
@@ -20,7 +19,7 @@ const app = express();
 
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
-
+app.use(cors());
 //serving static files
 // app.use(express.static(`${__dirname}/public`));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -64,7 +63,6 @@ app.use(
 app.use('/', viewRouter);
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/review', reviewRouter);
-app.use('/api/v1/booking/', bookingRouter);
 app.use('/api/v1/users/', userRouter);
 
 app.all('*', (req, res, next) => {
